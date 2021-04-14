@@ -5,6 +5,11 @@ int currLine = 1, currPos = 1;
 
 DIGIT   [0-9]
 LETTER [a-zA-Z]
+IDENTIFIER ({LETTER}({LETTER}|{DIGIT}|"_")*({LETTER}|{DIGIT}))|{LETTER}
+INVALID_START ({DIGIT}|"_")+{IDENTIFIER}
+INVALID_END {IDENTIFIER}"_"+
+INVALID_ALL {DIGIT}+{IDENTIFIER}+"_"+
+COMMENT ##.*\n
 
 %%
 
@@ -55,8 +60,14 @@ return		{printf("RETURN\n"); currPos += yyleng;}
 "]"		{printf("R_SQUARE_BRACKET\n"); currPos += yyleng;}
 "("         	{printf("L_PAREN\n"); currPos += yyleng;}
 ")"         	{printf("R_PAREN\n"); currPos += yyleng;}
+i
+{IDENTIFIER}	{printf("IDENT %s\n"); currPos += yyleng;}
+{DIGIT}+	{printf("NUMBER %s\n"); currPos += yyleng;}
+{INVALID_START}	{printf("Error at line %d, column %d: identifier \"s\" must begin with a letter\n", currLine, currPos, yytext);exit(0);}
+{INVALID_END}	{printf("Error at line %d, column %d: identifier \"%s\" cannot end with an underscore\n", currLine, currPos, yytext); exit(0):}
+{INVALID_ALL}	{printf("Error at line %d, column %d: identifier \"%s\" must begin with a letter and not end with a underscore\n", currLine, currPos, yytext); exit(0):}
+{COMMENT}	{currLine++; currPos = 1;}
 
-(\.{DIGIT}+)|({DIGIT}+(\.{DIGIT}*)?([eE][+-]?[0-9]+)?)    {printf("NUMBER %s\n", yytext); currPos += yyleng;}
 
 [ \t]+      {/* no spaces */ currPos += yyleng;}
 
