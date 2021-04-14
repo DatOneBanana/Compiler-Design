@@ -40,7 +40,7 @@ return		{printf("RETURN\n"); currPos += yyleng;}
 "+"         {printf("PLUS\n"); currPos += yyleng;}
 "*"         {printf("MULT\n"); currPos += yyleng;}
 "/"         {printf("DIV\n"); currPos += yyleng;}
-"="         {printf("EQUAL\n"); currPos += yyleng;}
+"%"         {printf("MOD\n"); currPos += yyleng;}
 "("         {printf("L_PAREN\n"); currPos += yyleng;}
 ")"         {printf("R_PAREN\n"); currPos += yyleng;}
 
