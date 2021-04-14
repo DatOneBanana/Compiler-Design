@@ -36,13 +36,25 @@ true		{printf("TRUE\n"); currPos += yyleng;}
 false		{printf("FALSE\n"); currPos += yyleng;}
 return		{printf("RETURN\n"); currPos += yyleng;}
 
-"-"         {printf("MINUS\n"); currPos += yyleng;}
-"+"         {printf("PLUS\n"); currPos += yyleng;}
-"*"         {printf("MULT\n"); currPos += yyleng;}
-"/"         {printf("DIV\n"); currPos += yyleng;}
-"%"         {printf("MOD\n"); currPos += yyleng;}
-"("         {printf("L_PAREN\n"); currPos += yyleng;}
-")"         {printf("R_PAREN\n"); currPos += yyleng;}
+"-"         	{printf("SUB\n"); currPos += yyleng;}
+"+"         	{printf("ADD\n"); currPos += yyleng;}
+"*"         	{printf("MULT\n"); currPos += yyleng;}
+"/"         	{printf("DIV\n"); currPos += yyleng;}
+"%"         	{printf("MOD\n"); currPos += yyleng;}
+"=="		{printf("EQ\n"); currPos += yyleng;}
+"<"		{printf("LT\n"); currPos += yyleng;}
+">"		{printf("GT\n"); currPos += yyleng;}
+"<="		{printf("LTE\n"); currPos += yyleng;}
+">="		{printf("GTE\n"); currPos += yyleng;}
+"<>"		{printf("NEQ\n"); currPos += yyleng;}
+":="		{printf("ASSIGN\n"); currPos += yyleng;}
+";"		{printf("SEMICOLON\n"); currPos += yyleng;}
+":"		{printf("COLON\n"); currPos += yyleng;}
+","		{printf("COMMA\n"); currPos += yyleng;}
+"["		{printf("L_SQUARE_BRACKET\n"); currPos += yyleng;}
+"]"		{printf("R_SQUARE_BRACKET\n"); currPos += yyleng;}
+"("         	{printf("L_PAREN\n"); currPos += yyleng;}
+")"         	{printf("R_PAREN\n"); currPos += yyleng;}
 
 (\.{DIGIT}+)|({DIGIT}+(\.{DIGIT}*)?([eE][+-]?[0-9]+)?)    {printf("NUMBER %s\n", yytext); currPos += yyleng;}
 
