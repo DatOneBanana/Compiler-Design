@@ -2133,6 +2133,6 @@ int main(int argc, char ** argv){
 		yyin = stdin;
 	}
 	yylex();
-	
+	return 0;	
 }
 
