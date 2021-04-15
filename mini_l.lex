@@ -9,7 +9,7 @@ IDENTIFIER ({LETTER}({LETTER}|{DIGIT}|"_")*({LETTER}|{DIGIT}))|{LETTER}
 INVALID_START ({DIGIT}|"_")+{IDENTIFIER}
 INVALID_END {IDENTIFIER}"_"+
 INVALID_ALL ({DIGIT}|"_")+{IDENTIFIER}+"_"+
-COMMENT ##.*
+COMMENT ##.*\n
 %%
 
 function	{printf("FUNCTION\n"); currPos += yyleng;}
