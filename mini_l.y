@@ -10,14 +10,12 @@ FILE * yyin;
 %}
 
 %union{
-    double dval;
     int num_val;
     char* id_val;
 }
 
 %error-verbose
 %start prog_start
-%type <id_val> mulop
 
 %token <id_val> IDENTIFIER
 %token <num_val> NUMBER
@@ -54,10 +52,7 @@ program:    /*epsilon*/ { printf("program -> epsilon\n"); }
     | program function { printf("program -> program function\n"); }
     ;
 
-function:   FUNCTION IDENTIFIER SEMICOLON
-            BEGINPARAMS declaration_loop ENDPARAMS
-            BEGINLOCALS declaration_loop ENDLOCALS
-            BEGINBODY statement_loop ENDBODY
+function:   FUNCTION IDENTIFIER SEMICOLON BEGINPARAMS declaration_loop ENDPARAMS BEGINLOCALS declaration_loop ENDLOCALS BEGINBODY statement_loop ENDBODY
             { printf("function -> FUNCTION IDENTIFIER %s SEMICOLON BEGINPARAMS declaration_loop ENDPARAMS BEGINLOCALS declaration_loop ENDLOCALS BEGINBODY statement_loop ENDBODY\n", $2); }
             ;
 
@@ -92,12 +87,12 @@ var_loop:	  var { printf("var_loop -> var\n"); }
 		| var_loop COMMA var { printf("var_loop -> var_loop COMMA var\n"); }
 		;
 
-bool_expr:	  relation_and_expr { printf("bool_expr -> relation_and_expr\n"); }
-        | bool_expr OR relation_and_expr { printf("bool_expr -> bool_expr OR relation_and_expr\n"); }
+bool_expr:	  relation_loop { printf("bool_expr -> relation_loop\n"); }
+        | bool_expr OR relation_loop { printf("bool_expr -> bool_expr OR relation_loop\n"); }
         ;
 
-relation_and_expr:	  relation_expr { printf("relation_and_expr -> relation_expr\n"); }
-        | relation_and_expr AND relation_expr { printf("relation_and_expr -> relation_and_expr AND relation_expr\n"); }
+relation_loop:	  relation_expr { printf("relation_loop -> relation_expr\n"); }
+        | relation_loop AND relation_expr { printf("relation_loop -> relation_loop AND relation_expr\n"); }
         ;
 
 relation_expr:	  expression comp expression { printf("relation_expr -> expression comp expression\n"); }
