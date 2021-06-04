@@ -1,163 +1,1099 @@
 %{
+#define YY_NO_UNPUT
 #include <stdio.h>
 #include <stdlib.h>
+#include <map>
+#include <string.h>
+#include <vector>
+void yyerror(const char* s);
+int yylex();
+  
+extern int lineNum;
+extern int lineCol;
+extern char* yytext;
+extern char* progName;
+  
+std::string newTemp();
+std::string newLabel();
 
-void yyerror(const char *msg);
-extern int currLine;
-extern int currPos;
+char empty[1] = "";
 
-FILE * yyin;
+std::map<std::string, int> variables;
+
+std::map<std::string, int> functions;
+std::vector<std::string> reservedWords = {"FUNCTION", "BEGIN_PARAMS", "END_PARAMS", "BEGIN_LOCALS", "END_LOCALS", "BEGIN_BODY", "END_BODY", "INTEGER",
+    "ARRAY", "OF", "IF", "THEN", "ENDIF", "ELSE", "WHILE", "DO", "FOREACH", "IN", "BEGINLOOP", "ENDLOOP", "CONTINUE", "READ", "WRITE", "AND", "OR", 
+    "NOT", "TRUE", "FALSE", "RETURN", "SUB", "ADD", "MULT", "DIV", "MOD", "EQ", "NEQ", "LT", "GT", "LTE", "GTE", "L_PAREN", "R_PAREN", "L_SQUARE_BRACKET",
+    "R_SQUARE_BRACKET", "COLON", "SEMICOLON", "COMMA", "ASSIGN", "function", "Ident", "beginparams", "endparams", "beginlocals", "endlocals", "integer", 
+    "beginbody", "endbody", "beginloop", "endloop", "if", "endif", "foreach", "continue", "while", "else", "read", "do", "write"};
 %}
 
+
 %union{
-    int num_val;
-    char* id_val;
-}
+  char* ident_val;
+  int num_val;
+  struct E {
+    char* place;
+    char* code;
+    bool array;
+  } expr;
+
+  struct S {
+    char* code;
+  } stat;
+ }
 
 %error-verbose
-%start prog_start
+%start Program
 
-%token <id_val> IDENTIFIER
+%token <ident_val> IDENT
 %token <num_val> NUMBER
 
-%token FUNCTION BEGINPARAMS ENDPARAMS BEGINLOCALS ENDLOCALS BEGINBODY ENDBODY INTEGER ARRAY OF IF THEN ENDIF ELSE WHILE DO BEGINLOOP ENDLOOP CONTINUE
-%token READ WRITE TRUE FALSE RETURN 
-%token SEMICOLON COLON COMMA L_PAREN R_PAREN L_SQUARE_BRACKET R_SQUARE_BRACKET ASSIGN
+%type <expr> Ident LocalIdent FunctionIdent
+%type <expr> Declarations Declaration Identifiers Var Vars
+%type <stat> Statements Statement ElseStatement
+%type <expr> Expression Expressions MultExp Term BoolExp RAExp RExp RExp1 Comp
 
-%left MULT
-%left DIV
-%left MOD
-%left ADD
-%left SUB
+%token FUNCTION BEGIN_PARAMS END_PARAMS BEGIN_LOCALS END_LOCALS BEGIN_BODY END_BODY INTEGER ARRAY OF IF THEN ENDIF ELSE WHILE DO FOREACH IN BEGINLOOP
+%token ENDLOOP CONTINUE READ WRITE TRUE FALSE RETURN L_PAREN R_PAREN L_SQUARE_BRACKET R_SQUARE_BRACKET COLON SEMICOLON COMMA
 
-%left EQ
-%left NEQ
-%left LT
-%left GT
-%left LTE
-%left GTE
-
-%left OR
-%left AND
+%left ASSIGN EQ NEQ LT GT LTE GTE ADD SUB MULT DIV MOD AND OR
 %right NOT
-%right ASSIGN
+
+%%  
+
+Program:         %empty
+{
+  std::string tempMain = "main";
+  if ( functions.find(tempMain) == functions.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Function main not declared");
+    yyerror(temp);
+  }
+  
+  if (variables.find(std::string(progName)) != variables.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Declared program name as variable.");
+    yyerror(temp);
+  }
+}
+| Function Program
+{
+};
+
+Function:        FUNCTION FunctionIdent SEMICOLON BEGIN_PARAMS Declarations END_PARAMS BEGIN_LOCALS Declarations END_LOCALS BEGIN_BODY Statements END_BODY
+{
+  std::string temp = "func ";
+  temp.append($2.place);
+  temp.append("\n");
+  temp.append($2.code);
+  temp.append($5.code);
+  
+  std::string init_params = $5.code;
+  int param_number = 0;
+  while (init_params.find(".") != std::string::npos) {
+    size_t pos = init_params.find(".");
+    init_params.replace(pos, 1, "=");
+    std::string param = ", $";
+    param.append(std::to_string(param_number++));
+    param.append("\n");
+    init_params.replace(init_params.find("\n", pos), 1, param);
+  }
+  temp.append(init_params);
+  temp.append($8.code);
+  std::string statements($11.code);
+  
+  if (statements.find("continue") != std::string::npos) {
+    printf("ERROR: Continue outside loop in function %s\n", $2.place);
+  }
+  temp.append(statements);
+  temp.append("endfunc\n");
+  
+  printf("%s", temp.c_str());
+};
 
 
-%%
+Declaration:     Identifiers COLON INTEGER
+{
+  std::string vars($1.place);
+  std::string temp;
+  std::string variable;
+  bool cont = true;
 
-prog_start: program {printf("prog_start -> program\n");}
-			;
-
-program:	/*epsilon*/ {printf("program -> epsilon\n");}
-    		| program function {printf("program -> program function\n");}
-    		;
-
-function:	FUNCTION IDENTIFIER SEMICOLON BEGINPARAMS declaration_loop ENDPARAMS BEGINLOCALS declaration_loop ENDLOCALS BEGINBODY statement_loop ENDBODY
-            {printf("function -> FUNCTION IDENTIFIER %s SEMICOLON BEGINPARAMS declaration_loop ENDPARAMS BEGINLOCALS declaration_loop ENDLOCALS BEGINBODY statement_loop ENDBODY\n", $2);}
-            ;
-
-declaration_loop:	/*epsilon*/ {printf("declaration_loop -> epsilon\n");}
-    				| declaration_loop declaration SEMICOLON {printf("declaration_loop -> declaration_loop declaration SEMICOLON\n");}
-    				;
-
-statement_loop:	statement SEMICOLON {printf("statement_loop -> statement SEMICOLON\n");}
-				| statement_loop statement SEMICOLON {printf("statement_loop -> statement_loop statement SEMICOLON\n");}
-				;
-
-declaration:	ident_loop COLON INTEGER {printf("declaration -> ident_loop COLON INTEGER\n");}
-			| ident_loop COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER {printf("declaration -> ident_loop COLON ARRAY L_SQUARE_BRACKET NUMBER %d R_SQUARE_BRACKET OF INTEGER\n", $5);}
-			;
-
-ident_loop:	IDENTIFIER {printf("ident_loop -> IDENTIFIER");}
-    		| ident_loop COMMA IDENTIFIER {printf("ident_loop -> ident_loop COMMA IDENTIFIER");}
-    		;
-
-statement:	var ASSIGN expression {printf("statement -> var ASSIGN expression\n");}
-			| IF bool_expr THEN statement_loop ENDIF {printf("statement -> IF bool_expr THEN statement_loop ENDIF\n");}
-			| IF bool_expr THEN statement_loop ELSE statement_loop ENDIF {printf("statement -> IF bool_expr THEN statement_loop ELSE statement_loop ENDIF\n");}
-			| WHILE bool_expr BEGINLOOP statement_loop ENDLOOP {printf("statement -> WHILE bool_expr BEGINLOOP statement_loop ENDLOOP\n");}
-			| DO BEGINLOOP statement_loop ENDLOOP WHILE bool_expr {printf("statement -> DO BEGINLOOP statement_loop ENDLOOP WHILE bool_expr\n");}
-			| READ var_loop {printf("statement -> READ var_loop\n");}
-			| WRITE var_loop {printf("statement -> WRITE var_loop\n");}
-			| CONTINUE {printf("statement -> CONTINUE\n");}
-			| RETURN expression {printf("statement -> RETURN expression\n");}
-			;
-
-var_loop:	var {printf("var_loop -> var\n");}
-			| var_loop COMMA var {printf("var_loop -> var_loop COMMA var\n");}
-			;
-
-bool_expr:	relation_loop {printf("bool_expr -> relation_loop\n");}
-        	| bool_expr OR relation_loop {printf("bool_expr -> bool_expr OR relation_loop\n");}
-        	;
-
-relation_loop:	relation_expr {printf("relation_loop -> relation_expr\n");}
-        	| relation_loop AND relation_expr {printf("relation_loop -> relation_loop AND relation_expr\n");}
-       		;
-
-relation_expr:	expression comp expression { printf("relation_expr -> expression comp expression\n");}
-			| NOT expression comp expression { printf("relation_expr -> NOT expression comp expression\n");}
-			| TRUE {printf("relation_expr -> TRUE\n");}
-			| NOT TRUE {printf("relation_expr -> NOT TRUE\n");}
-			| FALSE {printf("relation_expr -> FALSE\n");}
-			| NOT FALSE {printf("relation_expr -> NOT FALSE\n");}
-			| L_PAREN bool_expr R_PAREN {printf("relation_expr -> L_PAREN bool_expr R_PAREN\n");}
-			;
-
-comp:	EQ {printf("comp -> EQ\n");}
-		| NEQ {printf("comp -> NEQ\n");}
-		| LT {printf("comp -> LT\n");}
-		| GT {printf("comp -> GT\n");}
-		| LTE {printf("comp -> LTE\n");}
-		| GTE {printf("comp -> GTE\n");}
-		;
-
-expression: 	mult_expr {printf("expression -> mult_expr\n"); }
-        	| expression ADD mult_expr {printf("expression -> expression ADD mult_expr\n");}
-        	| expression SUB mult_expr {printf("expression -> expression SUB mult_expr\n");}
-        	;
-
-mult_expr:	term  {printf("mult_expr -> term\n");}
-        	| mult_expr mulop term {printf("mult_expr -> mult_expr mulop term\n");}
-        	;
-
-mulop:	MULT {printf("mulop -> MULT\n");}
-		| DIV  {printf("mulop -> DIV\n");}
-		| MOD {printf("mulop -> MOD\n");}
-		;
-
-term:	var {printf("term -> var\n");}
-		| SUB var {printf("term -> SUB var\n");}
-		| NUMBER {printf("term -> NUMBER %d\n", $1);}
-		| SUB NUMBER {printf("term -> SUB NUMBER %d\n", $2);}
-		| L_PAREN expression R_PAREN {printf("term -> L_PAREN expression R_PAREN\n");}
-		| SUB L_PAREN expression R_PAREN {printf("term -> SUB L_PAREN expression R_PAREN\n");}
-		| IDENTIFIER L_PAREN R_PAREN {printf("term -> IDENTIFIER %s L_PAREN R_PAREN\n", $1);}
-		| IDENTIFIER L_PAREN expression_loop R_PAREN {printf("term -> IDENTIFIER %s L_PAREN expression_loop R_PAREN\n", $1);}
-		;
-
-expression_loop:	expression {printf("expression_loop -> expression");}
-    				| expression_loop COMMA expression {printf("expression_loop -> expression_loop COMMA expression");}
-    				;
-		
-var:	IDENTIFIER {printf("var -> IDENTIFIER %s\n", $1);}
-		| IDENTIFIER L_SQUARE_BRACKET expression R_SQUARE_BRACKET {printf("var -> IDENTIFIER %s L_SQUARE_BRACKET expression R_SQUARE_BRACKET\n", $1);}
-		;
-
-
-%%
-
-int main(int argc, char ** argv) {
-    if(argc > 1) {
-        yyin = fopen(argv[1], "r");
-        if(yyin == NULL) {
-            printf("syntax: %s filename", argv[0]);
-        }
+  
+  size_t oldpos = 0;
+  size_t pos = 0;
+  bool isReserved = false;
+  while (cont) {
+    pos = vars.find("|", oldpos);
+    if (pos == std::string::npos) {
+      temp.append(". ");
+      variable = vars.substr(oldpos,pos);
+      temp.append(variable);
+      temp.append("\n");
+      cont = false;
     }
-    yyparse();
-    return 0;
+    else {
+      size_t len = pos - oldpos;
+      temp.append(". ");
+      variable = vars.substr(oldpos, len);
+      temp.append(variable);
+      temp.append("\n");
+    }
+    
+    for (unsigned int i = 0; i < reservedWords.size(); ++i) {
+      if (reservedWords.at(i) == variable) {
+        isReserved = true;
+      }
+    } 
+    
+    if (variables.find(variable) != variables.end()) {
+      char temp[128];
+      snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
+      yyerror(temp);
+    }
+    else if (isReserved){
+      char temp[128];
+      snprintf(temp, 128, "Invalid declaration of reserved words %s", variable.c_str());
+      yyerror(temp);
+    }
+    else {
+      variables.insert(std::pair<std::string,int>(variable,0));
+    }
+    
+    oldpos = pos + 1;
+  }
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);	      
+}
+| Identifiers COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER
+{
+  if ($5 <= 0) {
+    char temp[128];
+    snprintf(temp, 128, "Array size can't be less than 1");
+    yyerror(temp);
+  }
+  
+  std::string vars($1.place);
+  std::string temp;
+  std::string variable;
+  bool cont = true;
+
+  size_t oldpos = 0;
+  size_t pos = 0;
+  while (cont) {
+    pos = vars.find("|", oldpos);
+    if (pos == std::string::npos) {
+      temp.append(".[] ");
+      variable = vars.substr(oldpos, pos);
+      temp.append(variable);
+      temp.append(", ");
+      temp.append(std::to_string($5));
+      temp.append("\n");
+      cont = false;
+    }
+    else {
+      size_t len = pos - oldpos;
+      temp.append(".[] ");
+      variable = vars.substr(oldpos, len);
+      temp.append(variable);
+      temp.append(", ");
+      temp.append(std::to_string($5));
+      temp.append("\n");
+    }
+    
+    if (variables.find(variable) != variables.end()) {
+      char temp[128];
+      snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
+      yyerror(temp);
+    }
+    else {
+      variables.insert(std::pair<std::string,int>(variable,$5));
+    }
+      
+    oldpos = pos + 1;
+  }
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);	      
+};
+
+Declarations:    %empty
+{
+  $$.code = strdup(empty);
+  $$.place = strdup(empty);
+}
+| Declaration SEMICOLON Declarations
+{
+  std::string temp;
+  temp.append($1.code);
+  temp.append($3.code);
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);
+};
+
+Identifiers:     Ident
+{
+  $$.place = strdup($1.place);
+  $$.code = strdup(empty);
+}
+| Ident COMMA Identifiers
+{
+
+  std::string temp;
+  temp.append($1.place);
+  temp.append("|");
+  temp.append($3.place);
+  
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
 }
 
-void yyerror (const char *msg){
-    printf("Error: Line %d, position %d: %s \n", currLine, currPos, msg);
+Statements:      Statement SEMICOLON Statements
+{
+  std::string temp;
+  temp.append($1.code);
+  temp.append($3.code);
+
+  $$.code = strdup(temp.c_str());
+}
+| Statement SEMICOLON
+{
+  std::string temp;
+  temp.append($1.code);
+
+  $$.code = strdup(temp.c_str());
+};
+
+Statement:      Var ASSIGN Expression
+{
+  std::string temp;
+  temp.append($1.code);
+  temp.append($3.code);
+  std::string intermediate = $3.place;
+  if ($1.array && $3.array) {
+    intermediate = newTemp();
+    temp.append(". ");
+    temp.append(intermediate);
+    temp.append("\n");
+    temp.append("=[] ");
+    temp.append(intermediate);
+    temp.append(", ");
+    temp.append($3.place);
+    temp.append("\n");
+    temp.append("[]= ");
+  }
+  else if ($1.array) {
+    temp.append("[]= ");
+  }
+  else if ($3.array) {
+    temp.append("=[] ");
+  }
+  else {
+    temp.append("= ");
+  }
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append(intermediate);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+}
+| IF BoolExp THEN Statements ElseStatement ENDIF
+{
+  std::string then_begin = newLabel();
+  std::string after = newLabel();
+  std::string temp;
+
+
+  temp.append($2.code);
+  
+  temp.append("?:= ");
+  temp.append(then_begin);
+  temp.append(", ");
+  temp.append($2.place);
+  temp.append("\n");
+  
+  temp.append($5.code);
+  
+  temp.append(":= ");
+  temp.append(after);
+  temp.append("\n");
+  
+  temp.append(": ");
+  temp.append(then_begin);
+  temp.append("\n");
+  
+  temp.append($4.code);
+  
+  temp.append(": ");
+  temp.append(after);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+}		 
+| WHILE BoolExp BEGINLOOP Statements ENDLOOP
+{
+  std::string temp;
+  std::string beginWhile = newLabel();
+  std::string beginLoop = newLabel();
+  std::string endLoop = newLabel();
+  
+  std::string statement = $4.code;
+  std::string jump;
+  jump.append(":= ");
+  jump.append(beginWhile);
+  while (statement.find("continue") != std::string::npos) {
+    statement.replace(statement.find("continue"), 8, jump);
+  }
+  
+  temp.append(": ");
+  temp.append(beginWhile);
+  temp.append("\n");
+  temp.append($2.code);
+  temp.append("?:= ");
+  temp.append(beginLoop);
+  temp.append(", ");
+  temp.append($2.place);
+  temp.append("\n");
+  temp.append(":= ");
+  temp.append(endLoop);
+  temp.append("\n");
+  temp.append(": ");
+  temp.append(beginLoop);
+  temp.append("\n");
+  temp.append(statement);
+  temp.append(":= ");
+  temp.append(beginWhile);
+  temp.append("\n");
+  temp.append(": ");
+  temp.append(endLoop);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+}
+| DO BEGINLOOP Statements ENDLOOP WHILE BoolExp
+{
+  std::string temp;
+  std::string beginLoop = newLabel();
+  std::string beginWhile = newLabel();
+  
+  std::string statement = $3.code;
+  std::string jump;
+  jump.append(":= ");
+  jump.append(beginWhile);
+  while (statement.find("continue") != std::string::npos) {
+    statement.replace(statement.find("continue"), 8, jump);
+  }
+  
+  temp.append(": ");
+  temp.append(beginLoop);
+  temp.append("\n");
+  temp.append(statement);
+  temp.append(": ");
+  temp.append(beginWhile);
+  temp.append("\n");
+  temp.append($6.code);
+  temp.append("?:= ");
+  temp.append(beginLoop);
+  temp.append(", ");
+  temp.append($6.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+}
+| FOREACH LocalIdent IN Ident BEGINLOOP Statements ENDLOOP
+{
+  std::string temp;
+  std::string count = newTemp();
+  std::string check = newTemp();
+  std::string begin = newLabel();
+  std::string beginLoop = newLabel();
+  std::string increment = newLabel();
+  std::string endLoop = newLabel();
+  
+  std::string statement = $6.code;
+  std::string jump;
+  jump.append(":= ");
+  jump.append(increment);
+  while (statement.find("continue") != std::string::npos) {
+    statement.replace(statement.find("continue"), 8, jump);
+  }
+  
+  if (variables.find(std::string($4.place)) == variables.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Use of undeclared variable %s", $4.place);
+    yyerror(temp);
+  }
+  
+  else if (variables.find(std::string($4.place))->second == 0) {
+    char temp[128];
+    snprintf(temp, 128, "Use of scalar variable %s in foreach", $4.place);
+    yyerror(temp);
+  }
+
+  temp.append(". ");
+  temp.append($2.place);
+  temp.append("\n");
+
+  temp.append(". ");
+  temp.append(check);
+  temp.append("\n");
+
+  temp.append(". ");
+  temp.append(count);
+  temp.append("\n");
+
+  temp.append("= ");
+  temp.append(count);
+  temp.append(", 0");
+  temp.append("\n");
+  
+  temp.append(": ");
+  temp.append(begin);
+  temp.append("\n");
+
+  temp.append("< ");
+  temp.append(check);
+  temp.append(", ");
+  temp.append(count);
+  temp.append(", ");
+  temp.append(std::to_string(variables.find(std::string($4.place))->second));
+  temp.append("\n");
+ 
+  temp.append("?:= ");
+  temp.append(beginLoop);
+  temp.append(", ");
+  temp.append(check);
+  temp.append("\n");
+  
+  temp.append(":= ");
+  temp.append(endLoop);
+  temp.append("\n");
+  
+  temp.append(": ");
+  temp.append(beginLoop);
+  temp.append("\n");
+  
+  temp.append("=[] ");
+  temp.append($2.place);
+  temp.append(", ");
+  temp.append($4.place);
+  temp.append(", ");
+  temp.append(count);
+  temp.append("\n");
+  
+  temp.append(statement);
+  temp.append(": ");
+  temp.append(increment);
+  temp.append("\n");
+
+  temp.append("+ ");
+  temp.append(count);
+  temp.append(", ");
+  temp.append(count);
+  temp.append(", 1\n");
+  
+  temp.append(":= ");
+  temp.append(begin);
+  temp.append("\n");
+ 
+  temp.append(": ");
+  temp.append(endLoop);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+}
+| READ Vars
+{
+  std::string temp = $2.code;
+  size_t pos = 0;
+  do {
+    pos = temp.find("|", pos);
+    if (pos == std::string::npos)
+      break;
+    temp.replace(pos, 1, "<");
+  } while (true);
+
+  $$.code = strdup(temp.c_str());
+}
+| WRITE Vars
+{
+  std::string temp = $2.code;
+  size_t pos = 0;
+  do {
+    pos = temp.find("|", pos);
+    if (pos == std::string::npos)
+      break;
+    temp.replace(pos, 1, ">");
+  } while (true);
+
+  $$.code = strdup(temp.c_str());
+}
+| CONTINUE
+{
+  std::string temp = "continue\n";
+  $$.code = strdup(temp.c_str());
+}
+| RETURN Expression
+{
+  std::string temp;
+  temp.append($2.code);
+  temp.append("ret ");
+  temp.append($2.place);
+  temp.append("\n");
+  $$.code = strdup(temp.c_str());
+};
+
+
+ElseStatement:   %empty
+{
+  $$.code = strdup(empty);
+}
+| ELSE Statements
+{
+  $$.code = strdup($2.code);
+};
+
+Var:             Ident L_SQUARE_BRACKET Expression R_SQUARE_BRACKET
+{
+  if (variables.find(std::string($1.place)) == variables.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Use of undeclared variable %s", $1.place);
+    yyerror(temp);
+  }
+  
+  else if (variables.find(std::string($1.place))->second == 0) {
+    char temp[128];
+    snprintf(temp, 128, "Indexing a non-array variable %s", $1.place);
+    yyerror(temp);
+  }
+
+  std::string temp;
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+
+  $$.code = strdup($3.code);
+  $$.place = strdup(temp.c_str());
+  $$.array = true;
+}
+| Ident
+{
+  if (variables.find(std::string($1.place)) == variables.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Use of undeclared variable %s", $1.place);
+    yyerror(temp);
+  }
+  
+  else if (variables.find(std::string($1.place))->second > 0) {
+    char temp[128];
+    snprintf(temp, 128, "Failed to provide index for array variable %s", $1.place);
+    yyerror(temp);
+  }
+
+  $$.code = strdup(empty);
+  $$.place = strdup($1.place);
+  $$.array = false;
+};
+
+/* Vars is only used by read and write
+ * pass back the code ".[]| dst/src"
+ * replace "|" with correct < or > depending on read/write
+ * in read and write production
+ */
+Vars:            Var
+{
+  std::string temp;
+  temp.append($1.code);
+  if ($1.array)
+    temp.append(".[]| ");
+  else
+    temp.append(".| ");
+  
+  temp.append($1.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);
+}
+| Var COMMA Vars
+{
+  std::string temp;
+  temp.append($1.code);
+  if ($1.array)
+    temp.append(".[]| ");
+  else
+    temp.append(".| ");
+  
+  temp.append($1.place);
+  temp.append("\n");
+  temp.append($3.code);
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);
+};
+
+Expression:      MultExp
+{
+  $$.code = strdup($1.code);
+  $$.place = strdup($1.place);
+}
+| MultExp ADD Expression
+{
+  $$.place = strdup(newTemp().c_str());
+  
+  std::string temp;
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append("+ ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+}
+| MultExp SUB Expression
+{
+  $$.place = strdup(newTemp().c_str());
+  
+  std::string temp;
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append("- ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+};
+
+Expressions:     %empty
+{
+  $$.code = strdup(empty);
+  $$.place = strdup(empty);
+}
+| Expression COMMA Expressions
+{
+  std::string temp;
+  temp.append($1.code);
+  temp.append("param ");
+  temp.append($1.place);
+  temp.append("\n");
+  temp.append($3.code);
+
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);
+}
+| Expression
+{
+  std::string temp;
+  temp.append($1.code);
+  temp.append("param ");
+  temp.append($1.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(empty);
+};
+
+
+MultExp:         Term
+{
+  $$.code = strdup($1.code);
+  $$.place = strdup($1.place);
+}
+| Term MULT MultExp
+{
+  $$.place = strdup(newTemp().c_str());
+  
+  std::string temp;
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append("* ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+}
+| Term DIV MultExp
+{
+  $$.place = strdup(newTemp().c_str());
+  
+  std::string temp;
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append("/ ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+}
+| Term MOD MultExp
+{
+  $$.place = strdup(newTemp().c_str());
+  
+  std::string temp;
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append("% ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+
+  $$.code = strdup(temp.c_str());
+};
+
+
+Term:            Var
+{
+  
+  if ($$.array == true) {
+    std::string temp;
+    std::string intermediate = newTemp();
+    temp.append($1.code);
+    temp.append(". ");
+    temp.append(intermediate);
+    temp.append("\n");
+    temp.append("=[] ");
+    temp.append(intermediate);
+    temp.append(", ");
+    temp.append($1.place);
+    temp.append("\n");
+    $$.code = strdup(temp.c_str());
+    $$.place = strdup(intermediate.c_str());
+    $$.array = false;
+  }
+  else {
+    $$.code = strdup($1.code);
+    $$.place = strdup($1.place);
+  }
+}
+| SUB Var
+{
+  
+  $$.place = strdup(newTemp().c_str());
+  std::string temp;
+  temp.append($2.code);
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  if ($2.array) {
+    temp.append("=[] ");
+    temp.append($$.place);
+    temp.append(", ");
+    temp.append($2.place);
+    temp.append("\n");
+  }
+  else {
+    temp.append("= ");
+    temp.append($$.place);
+    temp.append(", ");
+    temp.append($2.place);
+    temp.append("\n");
+  }
+  temp.append("* ");
+  temp.append($$.place);
+  temp.append(", ");
+  temp.append($$.place);
+  temp.append(", -1\n");
+  
+  $$.code = strdup(temp.c_str());
+  $$.array = false;
+}
+| NUMBER
+{
+  $$.code = strdup(empty);
+  $$.place = strdup(std::to_string($1).c_str());
+}
+| SUB NUMBER
+{
+  std::string temp;
+  temp.append("-");
+  temp.append(std::to_string($2));
+  $$.code = strdup(empty);
+  $$.place = strdup(temp.c_str());
+}
+| L_PAREN Expression R_PAREN
+{
+  $$.code = strdup($2.code);
+  $$.place = strdup($2.place);
+}
+| SUB L_PAREN Expression R_PAREN
+{
+  $$.place = strdup($3.place);
+  std::string temp;
+  temp.append($3.code);
+  temp.append("* ");
+  temp.append($3.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append(", -1\n");
+  $$.code = strdup(temp.c_str());
+}
+| Ident L_PAREN Expressions R_PAREN
+{
+   
+  if (functions.find(std::string($1.place)) == functions.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Use of undeclared function %s", $1.place);
+    yyerror(temp);
+  }
+
+  $$.place = strdup(newTemp().c_str());
+
+  std::string temp;
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append($$.place);
+  temp.append("\n");
+  temp.append("call ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($$.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+};
+
+BoolExp:         RAExp 
+{
+  $$.place = strdup($1.place);
+  $$.code = strdup($1.code);
+}
+| RAExp OR BoolExp
+{
+  std::string dest = newTemp();
+  std::string temp;
+
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append(dest);
+  temp.append("\n");
+  
+  temp.append("|| ");
+  temp.append(dest);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(dest.c_str());
+};
+
+RAExp:           RExp
+{
+  $$.place = strdup($1.place);
+  $$.code = strdup($1.code);
+}
+| RExp AND RAExp
+{
+  std::string dest = newTemp();
+  std::string temp;
+
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append(dest);
+  temp.append("\n");
+  
+  temp.append("&& ");
+  temp.append(dest);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(dest.c_str());
+};
+
+RExp:            NOT RExp1 
+{
+  std::string dest = newTemp();
+  std::string temp;
+
+  temp.append($2.code);
+  temp.append(". ");
+  temp.append(dest);
+  temp.append("\n");
+  
+  temp.append("! ");
+  temp.append(dest);
+  temp.append(", ");
+  temp.append($2.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(dest.c_str());
+}
+| RExp1
+{
+  $$.place = strdup($1.place);
+  $$.code = strdup($1.code);
+};
+
+RExp1:           Expression Comp Expression
+{
+  std::string dest = newTemp();
+  std::string temp;  
+
+  temp.append($1.code);
+  temp.append($3.code);
+  temp.append(". ");
+  temp.append(dest);
+  temp.append("\n");
+  temp.append($2.place);
+  temp.append(dest);
+  temp.append(", ");
+  temp.append($1.place);
+  temp.append(", ");
+  temp.append($3.place);
+  temp.append("\n");
+  
+  $$.code = strdup(temp.c_str());
+  $$.place = strdup(dest.c_str());
+}
+| TRUE
+{
+  char temp[2] = "1";
+  $$.place = strdup(temp);
+  $$.code = strdup(empty);
+}
+| FALSE
+{
+  char temp[2] = "0";
+  $$.place = strdup(temp);
+  $$.code = strdup(empty);
+}
+| L_PAREN BoolExp R_PAREN
+{
+  $$.place = strdup($2.place);
+  $$.code = strdup($2.code);
+};
+
+Comp:            EQ
+{
+  std::string temp = "== ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+}
+| NEQ
+{
+  std::string temp = "!= ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+}
+| LT
+{
+  std::string temp = "< ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+}
+| GT
+{
+  std::string temp = "> ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+}
+| LTE
+{
+  std::string temp = "<= ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+}
+| GTE
+{
+  std::string temp = ">= ";
+  $$.place = strdup(temp.c_str());
+  $$.code = strdup(empty);
+};
+
+Ident:      IDENT
+{
+  $$.place = strdup($1);
+  $$.code = strdup(empty);;
+};
+LocalIdent:      IDENT
+{
+  
+  std::string variable($1);
+  if (variables.find(variable) != variables.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
+    yyerror(temp);
+  }
+  else {
+    variables.insert(std::pair<std::string,int>(variable,0));
+  }
+  $$.place = strdup($1);
+  $$.code = strdup(empty);;
+};
+FunctionIdent: IDENT
+{
+  if (functions.find(std::string($1)) != functions.end()) {
+    char temp[128];
+    snprintf(temp, 128, "Redeclaration of function %s", $1);
+    yyerror(temp);
+  }
+  else {
+    functions.insert(std::pair<std::string,int>($1,0));
+  }
+  $$.place = strdup($1);
+  $$.code = strdup(empty);;
+}
+%%
+
+void yyerror(const char* s) {
+   printf("ERROR: %s at symbol \"%s\" on line %d, col %d\n", s, yytext, lineNum, lineCol);
+}
+
+std::string newTemp() {
+  static int num = 0;
+  std::string temp = "_t" + std::to_string(num++);
+  return temp;
+}
+
+std::string newLabel() {
+  static int num = 0;
+  std::string temp = 'L' + std::to_string(num++);
+  return temp;
 }
