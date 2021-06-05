@@ -32,15 +32,14 @@ std::vector<std::string> reservedWords = {"FUNCTION", "BEGIN_PARAMS", "END_PARAM
 %union{
   char* ident_val;
   int num_val;
+    struct S {
+    char* code;
+  } stat;
   struct E {
     char* place;
     char* code;
     bool array;
   } expr;
-
-  struct S {
-    char* code;
-  } stat;
  }
 
 %error-verbose
@@ -51,7 +50,7 @@ std::vector<std::string> reservedWords = {"FUNCTION", "BEGIN_PARAMS", "END_PARAM
 
 %type <expr> Ident FunctionIdent
 %type <expr> Declarations Declaration Identifiers Var Vars
-%type <stat> Statements Statement ElseStatement
+%type <stat> Statement_Loop Statement ElseStatement
 %type <expr> Expression Expressions MultExp Term BoolExp Regxp RegLoopxp RegLoopxp1 Comp
 
 %token FUNCTION BEGIN_PARAMS END_PARAMS BEGIN_LOCALS END_LOCALS BEGIN_BODY END_BODY INTEGER ARRAY OF IF THEN ENDIF ELSE WHILE DO IN BEGINLOOP
@@ -75,7 +74,7 @@ Program:         %empty
 {
 };
 
-Function:        FUNCTION FunctionIdent SEMICOLON BEGIN_PARAMS Declarations END_PARAMS BEGIN_LOCALS Declarations END_LOCALS BEGIN_BODY Statements END_BODY
+Function:        FUNCTION FunctionIdent SEMICOLON BEGIN_PARAMS Declarations END_PARAMS BEGIN_LOCALS Declarations END_LOCALS BEGIN_BODY Statement_Loop END_BODY
 {
   std::string temp = "func ";
   temp.append($2.place);
@@ -243,9 +242,9 @@ Identifiers:     Ident
   
   $$.place = strdup(temp.c_str());
   $$.code = strdup(empty);
-}
+};
 
-Statements:      Statement SEMICOLON Statements
+Statement_Loop:      Statement SEMICOLON Statement_Loop
 {
   std::string temp;
   temp.append($1.code);
@@ -272,6 +271,7 @@ Statement:      Var ASSIGN Expression
     temp.append(". ");
     temp.append(intermediate);
     temp.append("\n");
+
     temp.append("=[] ");
     temp.append(intermediate);
     temp.append(", ");
@@ -295,7 +295,7 @@ Statement:      Var ASSIGN Expression
 
   $$.code = strdup(temp.c_str());
 }
-| IF BoolExp THEN Statements ElseStatement ENDIF
+| IF BoolExp THEN Statement_Loop ElseStatement ENDIF
 {
   std::string then_begin = newLabel();
   std::string after = newLabel();
@@ -328,7 +328,7 @@ Statement:      Var ASSIGN Expression
   
   $$.code = strdup(temp.c_str());
 }		 
-| WHILE BoolExp BEGINLOOP Statements ENDLOOP
+| WHILE BoolExp BEGINLOOP Statement_Loop ENDLOOP
 {
   std::string temp;
   std::string beginWhile = newLabel();
@@ -373,7 +373,7 @@ Statement:      Var ASSIGN Expression
 
   $$.code = strdup(temp.c_str());
 }
-| DO BEGINLOOP Statements ENDLOOP WHILE BoolExp
+| DO BEGINLOOP Statement_Loop ENDLOOP WHILE BoolExp
 {
   std::string temp;
   std::string beginLoop = newLabel();
@@ -451,7 +451,7 @@ ElseStatement:   %empty
 {
   $$.code = strdup(empty);
 }
-| ELSE Statements
+| ELSE Statement_Loop
 {
   $$.code = strdup($2.code);
 };
@@ -498,11 +498,6 @@ Var:             Ident L_SQUARE_BRACKET Expression R_SQUARE_BRACKET
   $$.array = false;
 };
 
-/* Vars is only used by read and write
- * pass back the code ".[]| dst/src"
- * replace "|" with correct < or > depending on read/write
- * in read and write production
- */
 Vars:            Var
 {
   std::string temp;
@@ -522,10 +517,12 @@ Vars:            Var
 {
   std::string temp;
   temp.append($1.code);
-  if ($1.array)
+  if ($1.array){
     temp.append(".[]| ");
-  else
+  }
+  else{
     temp.append(".| ");
+  }
   
   temp.append($1.place);
   temp.append("\n");
@@ -550,6 +547,7 @@ Expression:      MultExp
   temp.append(". ");
   temp.append($$.place);
   temp.append("\n");
+
   temp.append("+ ");
   temp.append($$.place);
   temp.append(", ");
@@ -570,6 +568,7 @@ Expression:      MultExp
   temp.append(". ");
   temp.append($$.place);
   temp.append("\n");
+
   temp.append("- ");
   temp.append($$.place);
   temp.append(", ");
@@ -624,6 +623,7 @@ MultExp:         Term
   temp.append(". ");
   temp.append($$.place);
   temp.append("\n");
+
   temp.append($1.code);
   temp.append($3.code);
   temp.append("* ");
@@ -644,6 +644,7 @@ MultExp:         Term
   temp.append(". ");
   temp.append($$.place);
   temp.append("\n");
+
   temp.append($1.code);
   temp.append($3.code);
   temp.append("/ ");
@@ -684,15 +685,18 @@ Term:            Var
   if ($$.array == true) {
     std::string temp;
     std::string intermediate = newTemp();
+
     temp.append($1.code);
     temp.append(". ");
     temp.append(intermediate);
     temp.append("\n");
+
     temp.append("=[] ");
     temp.append(intermediate);
     temp.append(", ");
     temp.append($1.place);
     temp.append("\n");
+
     $$.code = strdup(temp.c_str());
     $$.place = strdup(intermediate.c_str());
     $$.array = false;
