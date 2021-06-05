@@ -33,7 +33,6 @@ NEWLINE [\n]
 "else"         return ELSE; lineCol += yyleng;
 "while"        return WHILE; lineCol += yyleng;
 "do"           return DO; lineCol += yyleng;
-"foreach"      return FOREACH; lineCol += yyleng;
 "in"           return IN; lineCol += yyleng;
 "beginloop"    return BEGINLOOP; lineCol += yyleng;
 "endloop"      return ENDLOOP; lineCol += yyleng;

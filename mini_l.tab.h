@@ -63,38 +63,37 @@ extern int yydebug;
     ELSE = 273,
     WHILE = 274,
     DO = 275,
-    FOREACH = 276,
-    IN = 277,
-    BEGINLOOP = 278,
-    ENDLOOP = 279,
-    CONTINUE = 280,
-    READ = 281,
-    WRITE = 282,
-    TRUE = 283,
-    FALSE = 284,
-    RETURN = 285,
-    L_PAREN = 286,
-    R_PAREN = 287,
-    L_SQUARE_BRACKET = 288,
-    R_SQUARE_BRACKET = 289,
-    COLON = 290,
-    SEMICOLON = 291,
-    COMMA = 292,
-    ASSIGN = 293,
-    EQ = 294,
-    NEQ = 295,
-    LT = 296,
-    GT = 297,
-    LTE = 298,
-    GTE = 299,
-    ADD = 300,
-    SUB = 301,
-    MULT = 302,
-    DIV = 303,
-    MOD = 304,
-    AND = 305,
-    OR = 306,
-    NOT = 307
+    IN = 276,
+    BEGINLOOP = 277,
+    ENDLOOP = 278,
+    CONTINUE = 279,
+    READ = 280,
+    WRITE = 281,
+    TRUE = 282,
+    FALSE = 283,
+    RETURN = 284,
+    L_PAREN = 285,
+    R_PAREN = 286,
+    L_SQUARE_BRACKET = 287,
+    R_SQUARE_BRACKET = 288,
+    COLON = 289,
+    SEMICOLON = 290,
+    COMMA = 291,
+    ASSIGN = 292,
+    EQ = 293,
+    NEQ = 294,
+    LT = 295,
+    GT = 296,
+    LTE = 297,
+    GTE = 298,
+    ADD = 299,
+    SUB = 300,
+    MULT = 301,
+    DIV = 302,
+    MOD = 303,
+    AND = 304,
+    OR = 305,
+    NOT = 306
   };
 #endif
 
@@ -118,7 +117,7 @@ union YYSTYPE
   } stat;
  
 
-#line 122 "mini_l.tab.h" /* yacc.c:1909  */
+#line 121 "mini_l.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

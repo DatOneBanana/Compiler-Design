@@ -5,7 +5,7 @@
 #include <map>
 #include <string.h>
 #include <vector>
-void yyerror(const char* s);
+void yyerror(const char* msg);
 int yylex();
   
 extern int lineNum;
@@ -22,10 +22,10 @@ std::map<std::string, int> variables;
 
 std::map<std::string, int> functions;
 std::vector<std::string> reservedWords = {"FUNCTION", "BEGIN_PARAMS", "END_PARAMS", "BEGIN_LOCALS", "END_LOCALS", "BEGIN_BODY", "END_BODY", "INTEGER",
-    "ARRAY", "OF", "IF", "THEN", "ENDIF", "ELSE", "WHILE", "DO", "FOREACH", "IN", "BEGINLOOP", "ENDLOOP", "CONTINUE", "READ", "WRITE", "AND", "OR", 
+    "ARRAY", "OF", "IF", "THEN", "ENDIF", "ELSE", "WHILE", "DO", "IN", "BEGINLOOP", "ENDLOOP", "CONTINUE", "READ", "WRITE", "AND", "OR", 
     "NOT", "TRUE", "FALSE", "RETURN", "SUB", "ADD", "MULT", "DIV", "MOD", "EQ", "NEQ", "LT", "GT", "LTE", "GTE", "L_PAREN", "R_PAREN", "L_SQUARE_BRACKET",
     "R_SQUARE_BRACKET", "COLON", "SEMICOLON", "COMMA", "ASSIGN", "function", "Ident", "beginparams", "endparams", "beginlocals", "endlocals", "integer", 
-    "beginbody", "endbody", "beginloop", "endloop", "if", "endif", "foreach", "continue", "while", "else", "read", "do", "write"};
+    "beginbody", "endbody", "beginloop", "endloop", "if", "endif", "continue", "while", "else", "read", "do", "write"};
 %}
 
 
@@ -49,12 +49,12 @@ std::vector<std::string> reservedWords = {"FUNCTION", "BEGIN_PARAMS", "END_PARAM
 %token <ident_val> IDENT
 %token <num_val> NUMBER
 
-%type <expr> Ident LocalIdent FunctionIdent
+%type <expr> Ident FunctionIdent
 %type <expr> Declarations Declaration Identifiers Var Vars
 %type <stat> Statements Statement ElseStatement
-%type <expr> Expression Expressions MultExp Term BoolExp RAExp RExp RExp1 Comp
+%type <expr> Expression Expressions MultExp Term BoolExp Regxp RegLoopxp RegLoopxp1 Comp
 
-%token FUNCTION BEGIN_PARAMS END_PARAMS BEGIN_LOCALS END_LOCALS BEGIN_BODY END_BODY INTEGER ARRAY OF IF THEN ENDIF ELSE WHILE DO FOREACH IN BEGINLOOP
+%token FUNCTION BEGIN_PARAMS END_PARAMS BEGIN_LOCALS END_LOCALS BEGIN_BODY END_BODY INTEGER ARRAY OF IF THEN ENDIF ELSE WHILE DO IN BEGINLOOP
 %token ENDLOOP CONTINUE READ WRITE TRUE FALSE RETURN L_PAREN R_PAREN L_SQUARE_BRACKET R_SQUARE_BRACKET COLON SEMICOLON COMMA
 
 %left ASSIGN EQ NEQ LT GT LTE GTE ADD SUB MULT DIV MOD AND OR
@@ -67,13 +67,7 @@ Program:         %empty
   std::string tempMain = "main";
   if ( functions.find(tempMain) == functions.end()) {
     char temp[128];
-    snprintf(temp, 128, "Function main not declared");
-    yyerror(temp);
-  }
-  
-  if (variables.find(std::string(progName)) != variables.end()) {
-    char temp[128];
-    snprintf(temp, 128, "Declared program name as variable.");
+    snprintf(temp, 128, "Main not declared");
     yyerror(temp);
   }
 }
@@ -104,7 +98,7 @@ Function:        FUNCTION FunctionIdent SEMICOLON BEGIN_PARAMS Declarations END_
   std::string statements($11.code);
   
   if (statements.find("continue") != std::string::npos) {
-    printf("ERROR: Continue outside loop in function %s\n", $2.place);
+    printf("ERROR: Outside loop in function %s\n", $2.place);
   }
   temp.append(statements);
   temp.append("endfunc\n");
@@ -149,12 +143,12 @@ Declaration:     Identifiers COLON INTEGER
     
     if (variables.find(variable) != variables.end()) {
       char temp[128];
-      snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
+      snprintf(temp, 128, "Redeclared variable %s", variable.c_str());
       yyerror(temp);
     }
     else if (isReserved){
       char temp[128];
-      snprintf(temp, 128, "Invalid declaration of reserved words %s", variable.c_str());
+      snprintf(temp, 128, "Invalid declaration of %s", variable.c_str());
       yyerror(temp);
     }
     else {
@@ -171,7 +165,7 @@ Declaration:     Identifiers COLON INTEGER
 {
   if ($5 <= 0) {
     char temp[128];
-    snprintf(temp, 128, "Array size can't be less than 1");
+    snprintf(temp, 128, "Array size needs to be bigger than 1");
     yyerror(temp);
   }
   
@@ -205,7 +199,7 @@ Declaration:     Identifiers COLON INTEGER
     
     if (variables.find(variable) != variables.end()) {
       char temp[128];
-      snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
+      snprintf(temp, 128, "Redeclared variable %s", variable.c_str());
       yyerror(temp);
     }
     else {
@@ -352,22 +346,27 @@ Statement:      Var ASSIGN Expression
   temp.append(": ");
   temp.append(beginWhile);
   temp.append("\n");
+
   temp.append($2.code);
   temp.append("?:= ");
   temp.append(beginLoop);
   temp.append(", ");
   temp.append($2.place);
   temp.append("\n");
+
   temp.append(":= ");
   temp.append(endLoop);
   temp.append("\n");
+
   temp.append(": ");
   temp.append(beginLoop);
   temp.append("\n");
+
   temp.append(statement);
   temp.append(":= ");
   temp.append(beginWhile);
   temp.append("\n");
+
   temp.append(": ");
   temp.append(endLoop);
   temp.append("\n");
@@ -391,117 +390,17 @@ Statement:      Var ASSIGN Expression
   temp.append(": ");
   temp.append(beginLoop);
   temp.append("\n");
+
   temp.append(statement);
   temp.append(": ");
   temp.append(beginWhile);
   temp.append("\n");
+
   temp.append($6.code);
   temp.append("?:= ");
   temp.append(beginLoop);
   temp.append(", ");
   temp.append($6.place);
-  temp.append("\n");
-  
-  $$.code = strdup(temp.c_str());
-}
-| FOREACH LocalIdent IN Ident BEGINLOOP Statements ENDLOOP
-{
-  std::string temp;
-  std::string count = newTemp();
-  std::string check = newTemp();
-  std::string begin = newLabel();
-  std::string beginLoop = newLabel();
-  std::string increment = newLabel();
-  std::string endLoop = newLabel();
-  
-  std::string statement = $6.code;
-  std::string jump;
-  jump.append(":= ");
-  jump.append(increment);
-  while (statement.find("continue") != std::string::npos) {
-    statement.replace(statement.find("continue"), 8, jump);
-  }
-  
-  if (variables.find(std::string($4.place)) == variables.end()) {
-    char temp[128];
-    snprintf(temp, 128, "Use of undeclared variable %s", $4.place);
-    yyerror(temp);
-  }
-  
-  else if (variables.find(std::string($4.place))->second == 0) {
-    char temp[128];
-    snprintf(temp, 128, "Use of scalar variable %s in foreach", $4.place);
-    yyerror(temp);
-  }
-
-  temp.append(". ");
-  temp.append($2.place);
-  temp.append("\n");
-
-  temp.append(". ");
-  temp.append(check);
-  temp.append("\n");
-
-  temp.append(". ");
-  temp.append(count);
-  temp.append("\n");
-
-  temp.append("= ");
-  temp.append(count);
-  temp.append(", 0");
-  temp.append("\n");
-  
-  temp.append(": ");
-  temp.append(begin);
-  temp.append("\n");
-
-  temp.append("< ");
-  temp.append(check);
-  temp.append(", ");
-  temp.append(count);
-  temp.append(", ");
-  temp.append(std::to_string(variables.find(std::string($4.place))->second));
-  temp.append("\n");
- 
-  temp.append("?:= ");
-  temp.append(beginLoop);
-  temp.append(", ");
-  temp.append(check);
-  temp.append("\n");
-  
-  temp.append(":= ");
-  temp.append(endLoop);
-  temp.append("\n");
-  
-  temp.append(": ");
-  temp.append(beginLoop);
-  temp.append("\n");
-  
-  temp.append("=[] ");
-  temp.append($2.place);
-  temp.append(", ");
-  temp.append($4.place);
-  temp.append(", ");
-  temp.append(count);
-  temp.append("\n");
-  
-  temp.append(statement);
-  temp.append(": ");
-  temp.append(increment);
-  temp.append("\n");
-
-  temp.append("+ ");
-  temp.append(count);
-  temp.append(", ");
-  temp.append(count);
-  temp.append(", 1\n");
-  
-  temp.append(":= ");
-  temp.append(begin);
-  temp.append("\n");
- 
-  temp.append(": ");
-  temp.append(endLoop);
   temp.append("\n");
   
   $$.code = strdup(temp.c_str());
@@ -890,12 +789,12 @@ Term:            Var
   $$.code = strdup(temp.c_str());
 };
 
-BoolExp:         RAExp 
+BoolExp:         Regxp 
 {
   $$.place = strdup($1.place);
   $$.code = strdup($1.code);
 }
-| RAExp OR BoolExp
+| Regxp OR BoolExp
 {
   std::string dest = newTemp();
   std::string temp;
@@ -918,12 +817,12 @@ BoolExp:         RAExp
   $$.place = strdup(dest.c_str());
 };
 
-RAExp:           RExp
+Regxp:           RegLoopxp
 {
   $$.place = strdup($1.place);
   $$.code = strdup($1.code);
 }
-| RExp AND RAExp
+| RegLoopxp AND Regxp
 {
   std::string dest = newTemp();
   std::string temp;
@@ -946,7 +845,7 @@ RAExp:           RExp
   $$.place = strdup(dest.c_str());
 };
 
-RExp:            NOT RExp1 
+RegLoopxp:            NOT RegLoopxp1
 {
   std::string dest = newTemp();
   std::string temp;
@@ -965,13 +864,13 @@ RExp:            NOT RExp1
   $$.code = strdup(temp.c_str());
   $$.place = strdup(dest.c_str());
 }
-| RExp1
+| RegLoopxp1
 {
   $$.place = strdup($1.place);
   $$.code = strdup($1.code);
 };
 
-RExp1:           Expression Comp Expression
+RegLoopxp1:           Expression Comp Expression
 {
   std::string dest = newTemp();
   std::string temp;  
@@ -1052,21 +951,6 @@ Ident:      IDENT
   $$.place = strdup($1);
   $$.code = strdup(empty);;
 };
-LocalIdent:      IDENT
-{
-  
-  std::string variable($1);
-  if (variables.find(variable) != variables.end()) {
-    char temp[128];
-    snprintf(temp, 128, "Redeclaration of variable %s", variable.c_str());
-    yyerror(temp);
-  }
-  else {
-    variables.insert(std::pair<std::string,int>(variable,0));
-  }
-  $$.place = strdup($1);
-  $$.code = strdup(empty);;
-};
 FunctionIdent: IDENT
 {
   if (functions.find(std::string($1)) != functions.end()) {
@@ -1082,8 +966,8 @@ FunctionIdent: IDENT
 }
 %%
 
-void yyerror(const char* s) {
-   printf("ERROR: %s at symbol \"%s\" on line %d, col %d\n", s, yytext, lineNum, lineCol);
+void yyerror(const char* msg) {
+   printf("Error: Line %d, position %d: %s \n", lineNum, lineCol, msg);
 }
 
 std::string newTemp() {
